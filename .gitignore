@@ -1,0 +1,6 @@
+.idea/
+venv/
+*.pyc
+.DS_Store
+
+google_client_secret.json
