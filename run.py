@@ -1,7 +1,14 @@
-from gekkonbot.spreadsheets import get_credentials, ItemsCatalog
+import os
+from gekkonbot.bot import init
 
-credentials = get_credentials("google_service.json")
-catalog = ItemsCatalog(credentials, "1s8wkQgta6EqCC9UF8zDrom6YRzN3KYzDLugg4uL-vqA")
-print(catalog.all())
-print("*****")
-print(catalog.get_category(2))
+CATALOG_TABLE_ID = ""  # TODO CHANGE
+ORDERS_TABLE_ID = ""  # TODO CHANGE
+SECRETS_DIR = os.getcwd()
+PRODUCTION_CHAT_ID = -0  # TODO CHANGE
+
+
+if __name__ == '__main__':
+    updater = init(CATALOG_TABLE_ID, ORDERS_TABLE_ID, SECRETS_DIR, PRODUCTION_CHAT_ID)
+    print("Logged in as {}".format(updater.bot.get_me().name))
+    updater.start_polling()
+    updater.idle()
