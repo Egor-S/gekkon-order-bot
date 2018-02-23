@@ -21,7 +21,7 @@ class ItemsCatalog(SpreadsheetService):
     """
     Provides list of available items for requesting
     """
-    range = "items!A3:C"  # default catalog range
+    range = "items!A1:C"  # default catalog range
 
     def __init__(self, credentials, table_id):
         """
