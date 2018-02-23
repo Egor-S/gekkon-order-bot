@@ -130,6 +130,15 @@ def chatid_command(bot, update):
     bot.send_message(text="chat_id: {}".format(chat_id), chat_id=chat_id)
 
 
+def forceupdate_command(bot, update):
+    """
+    Force update of catalog
+    """
+    ic.last_update = 0
+    ic.all()
+    bot.send_message(text="База успешно обновлена", chat_id=update.message.chat_id)
+
+
 def error_handler(bot, update, telegram_error):
     """
     Error handler (seriously?!)
@@ -225,6 +234,7 @@ def init(catalog_id, orders_id, secrets_dir, chat_id):
     )
     updater.dispatcher.add_handler(conversation_handler)
     updater.dispatcher.add_handler(CommandHandler('chatid', chatid_command))
+    updater.dispatcher.add_handler(CommandHandler('forceupdate', forceupdate_command))
 
     updater.dispatcher.add_error_handler(error_handler)
     return updater

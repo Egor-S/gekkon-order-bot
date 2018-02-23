@@ -21,3 +21,18 @@ pip install -r requirements.txt
 
 Замените на корректные Google Spreadsheet Ids и `chat_id` в `run.py`.
 При необходимости замените значение диапазона `range` в классе `ItemsCatalog` в файле `spreadsheets.py`.
+
+## Использование
+```bash
+cd ~/gekkon-order-bot
+```
+
+Для глобального инерпретатора Python
+```bash
+python run.py
+```
+
+Для `virtualenv`
+```bash
+venv/bin/python run.py
+```
