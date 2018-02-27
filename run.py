@@ -1,10 +1,5 @@
-import os
 from gekkonbot.bot import init
-
-CATALOG_TABLE_ID = ""  # TODO CHANGE
-ORDERS_TABLE_ID = ""  # TODO CHANGE
-SECRETS_DIR = os.getcwd()
-PRODUCTION_CHAT_ID = -0  # TODO CHANGE
+from config import CATALOG_TABLE_ID, ORDERS_TABLE_ID, PRODUCTION_CHAT_ID, SECRETS_DIR
 
 
 if __name__ == '__main__':
