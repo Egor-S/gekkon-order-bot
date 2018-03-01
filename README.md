@@ -50,13 +50,13 @@ virtualenv venv -p python3
 Устанавливаем зависимости:
 
 ```bash
-env/bin/pip install -r requirements.txt
+venv/bin/pip install -r requirements.txt
 ```
 
 Запускаем бота:
 
 ```bash
-env/bin/python run.py
+venv/bin/python run.py
 ```
 
 Если все действия выполнены правильно, то будет выведено сообщение формата "Logged in as @YourBotName".

@@ -59,7 +59,7 @@ class ItemsCatalog(SpreadsheetService):
         :return: Items list from category
         """
         catalog = self.all()
-        subcatalog = [(code, *catalog[code]) for code in catalog if code // 100 == category]
+        subcatalog = [(code,) + tuple(catalog[code]) for code in catalog if code // 100 == category]
         return subcatalog
 
     def get(self, code):
@@ -68,7 +68,7 @@ class ItemsCatalog(SpreadsheetService):
         :return: Item
         """
         catalog = self.all()
-        item = (code, *catalog[code])
+        item = (code,) + tuple(catalog[code])
         return item
 
 
