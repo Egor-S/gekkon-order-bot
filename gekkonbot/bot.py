@@ -205,12 +205,13 @@ def get_confirm_menu():
     return markup
 
 
-def init(catalog_id, orders_id, secrets_dir, chat_id):
+def init(catalog_id, orders_id, secrets_dir, chat_id, proxy=None):
     """
     :param catalog_id: Google spreadsheet id
     :param orders_id: Google spreadsheet id
     :param secrets_dir: Directory with secrets
     :param chat_id: Production chat id (for notifications)
+    :param proxy: Tuple (url, username, password) for proxy or None
     :return: Updated object
     """
     global ic, ol, PRODUCTION_CHAT_ID
@@ -219,7 +220,16 @@ def init(catalog_id, orders_id, secrets_dir, chat_id):
     ol = OrderList(credentials, orders_id)
     PRODUCTION_CHAT_ID = chat_id
 
-    updater = Updater(get_token(os.path.join("telegram.secret")))
+    request_kwargs = {}
+    # proxy setup
+    if proxy is not None:
+        request_kwargs['proxy_url'] = proxy[0]
+        request_kwargs['urllib3_proxy_kwargs'] = {
+            'username': proxy[1],
+            'password': proxy[2]
+        }
+
+    updater = Updater(get_token(os.path.join("telegram.secret")), request_kwargs=request_kwargs)
     updater.dispatcher.add_handler(CommandHandler('start', start_command, filters=InvertedFilter(Filters.group)))
     # Order process
     conversation_handler = ConversationHandler(
