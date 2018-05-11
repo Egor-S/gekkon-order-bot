@@ -9,3 +9,5 @@ PROXY = False
 PROXY_URL = "socks5://127.0.0.1:1080/"  # "socks5://domain_or_ip:port/"
 PROXY_USER = "place-here-your-username"
 PROXY_PASS = "place-here-your-password"
+
+WELCOME_MSG = """Для начала оформления заявки отправьте /order\nДля отмены отправьте /abort"""

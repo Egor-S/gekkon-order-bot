@@ -32,7 +32,7 @@ def start_command(bot, update):
     """
     Initial information for user
     """
-    update.message.reply_text("Для начала оформления заявки отправьте /order\nДля отмены отправьте /abort")
+    update.message.reply_text(START_MSG)
 
 
 def order_command(bot, update):
@@ -70,7 +70,7 @@ def items_callback(bot, update, user_data):
                               parse_mode=ParseMode.MARKDOWN)
         return State.CHOOSE_CATEGORY
     user_data['item'] = int(query.data)
-    item = ic.get(user_data['item'])
+    item = ic.get(user_data['category'], user_data['item'])
     bot.edit_message_text(text=Text.CONFIRM_ITEM.format(item[1], item[2]), reply_markup=get_confirm_menu(),
                           chat_id=query.message.chat_id, message_id=query.message.message_id,
                           parse_mode=ParseMode.MARKDOWN)
@@ -90,7 +90,7 @@ def confirm_item_callback(bot, update, user_data):
                               parse_mode=ParseMode.MARKDOWN)
         return State.CHOOSE_ITEM
     else:
-        item = ic.get(user_data['item'])
+        item = ic.get(user_data['category'], user_data['item'])
         bot.edit_message_text(text=Text.CONFIRMED_ITEM.format(item[1], item[2]),
                               chat_id=query.message.chat_id, message_id=query.message.message_id,
                               parse_mode=ParseMode.MARKDOWN)
@@ -104,13 +104,16 @@ def count_handler(bot, update, user_data):
     Put order in DB and notify in channel
     """
     count = int(update.message.text)
-    item = ic.get(user_data['item'])
+    item = ic.get(user_data['category'], user_data['item'])
     name = update.message.from_user.name
     order_id = ol.new(item, count, name)
     update.message.reply_text(Text.DONE.format(order_id, item[1], count),
                               parse_mode=ParseMode.MARKDOWN)
-    bot.send_message(text=Text.PRODUCTION.format(order_id, item[0], item[1], count, name),
-                     chat_id=PRODUCTION_CHAT_ID, parse_mode=ParseMode.MARKDOWN)
+    try:
+        bot.send_message(text=Text.PRODUCTION.format(order_id, item[0], item[1], count, name),
+                         chat_id=PRODUCTION_CHAT_ID, parse_mode=ParseMode.MARKDOWN)
+    except Exception:
+        print("Can't send message to notification chat")
     return ConversationHandler.END
 
 
@@ -160,15 +163,10 @@ def get_category_menu():
     """
     :return:  InlineKeyboardMarkup
     """
-    keyboard = [
-        [
-            InlineKeyboardButton("Отдельные товары", callback_data="1"),
-            InlineKeyboardButton("Обеспечение курсов", callback_data="2")
-        ],
-        [
-            InlineKeyboardButton("Комплекты для обеспечения курсов", callback_data="3")
-        ]
-    ]
+    categories = ic.get_categories()
+    keyboard = []
+    for i, title in categories:
+        keyboard.append([InlineKeyboardButton(title, callback_data=str(i))])
     markup = InlineKeyboardMarkup(keyboard)
     return markup
 
@@ -205,7 +203,7 @@ def get_confirm_menu():
     return markup
 
 
-def init(catalog_id, orders_id, secrets_dir, chat_id, proxy=None):
+def init(catalog_id, orders_id, secrets_dir, chat_id, start_msg, proxy=None):
     """
     :param catalog_id: Google spreadsheet id
     :param orders_id: Google spreadsheet id
@@ -214,11 +212,12 @@ def init(catalog_id, orders_id, secrets_dir, chat_id, proxy=None):
     :param proxy: Tuple (url, username, password) for proxy or None
     :return: Updated object
     """
-    global ic, ol, PRODUCTION_CHAT_ID
+    global ic, ol, PRODUCTION_CHAT_ID, START_MSG
     credentials = get_credentials(os.path.join(secrets_dir, "google_service.json"))
     ic = ItemsCatalog(credentials, catalog_id)
     ol = OrderList(credentials, orders_id)
     PRODUCTION_CHAT_ID = chat_id
+    START_MSG = start_msg
 
     request_kwargs = {}
     # proxy setup

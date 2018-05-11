@@ -1,5 +1,6 @@
 import httplib2
 import apiclient
+import re
 import datetime as dt
 from oauth2client import service_account
 
@@ -21,7 +22,7 @@ class ItemsCatalog(SpreadsheetService):
     """
     Provides list of available items for requesting
     """
-    range = "items!A2:C"  # default catalog range
+    range = "Новая номенклатура!A2:C"  # default catalog range
 
     def __init__(self, credentials, table_id):
         """
@@ -43,13 +44,35 @@ class ItemsCatalog(SpreadsheetService):
             query = self.service.spreadsheets().values().get(spreadsheetId=self.spreadsheet_id, range=self.range)
             response = query.execute()
             rows = response.get('values', [])
-            self._cache = {}
+            self._cache = []
+            category_name = "Unnamed category"
+            category_items = {}
+
             for row in rows:
-                try:
-                    code = int(row[0])
-                    self._cache[code] = row[1:]
-                except ValueError:
-                    continue
+                if len(row) > 0:
+                    if row[0]:  # category header
+                        if len(category_items) > 0:
+                            self._cache.append({
+                                'title': category_name,
+                                'items': category_items
+                            })
+                        category_name = row[0].split(":")[-1].strip()
+                        category_items = {}
+                    else:
+                        try:
+                            code = int(row[1])
+                            name_search = re.search('"([^"]+)"', row[2])
+                            if name_search:
+                                category_items[code] = (name_search.group(1), row[2])
+                            else:
+                                category_items[code] = (row[2], row[2])
+                        except ValueError:  # no code
+                            continue
+            if len(category_items) > 0:
+                self._cache.append({
+                    'title': category_name,
+                    'items': category_items
+                })
             self.last_update = now
         return self._cache
 
@@ -59,17 +82,27 @@ class ItemsCatalog(SpreadsheetService):
         :return: Items list from category
         """
         catalog = self.all()
-        subcatalog = [(code,) + tuple(catalog[code]) for code in catalog if code // 100 == category]
+        subcatalog = [(code,) + tuple(catalog[category]['items'][code]) for code in catalog[category]['items']]
         return subcatalog
 
-    def get(self, code):
+    def get(self, category, code):
         """
+        :param category: Item category id
         :param code: Item code
         :return: Item
         """
         catalog = self.all()
-        item = (code,) + tuple(catalog[code])
+        item = (code,) + tuple(catalog[category]['items'][code])
         return item
+
+    def get_categories(self):
+        """
+        :return: List of categories
+        """
+        categories = []
+        for i, category in enumerate(self._cache):
+            categories.append((i, category['title']))
+        return categories
 
 
 class OrderList(SpreadsheetService):
