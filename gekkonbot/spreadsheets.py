@@ -67,7 +67,12 @@ class ItemsCatalog(SpreadsheetService):
                             else:
                                 category_items[code] = (row[2], row[2])
                         except ValueError:  # no code
+                            print("No code in {}".format(row))
                             continue
+                        except IndexError:  # no name
+                            print("No name in {}".format(row))
+                            continue
+
             if len(category_items) > 0:
                 self._cache.append({
                     'title': category_name,
@@ -131,18 +136,20 @@ class OrderList(SpreadsheetService):
         column = list(zip(*response.get('values', [['0']])))[0]
         self.last_id = max(map(int, column))
 
-    def new(self, item, count, customer):
+    def new(self, item, count, customer, deadline, comment):
         """
         :param item: Item code
         :param count: Items count
         :param customer: Customer name
+        :param deadline: Deadline date
+        :param comment: Purpose for order
         :return:
         """
         time = dt.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         self.last_id += 1
         order_id = "{:05}".format(self.last_id)
         body = {
-            'values': [[order_id, str(item[0]), item[1], str(count), customer, time]]
+            'values': [[order_id, str(item[0]), item[1], str(count), customer, time, '', '', deadline, comment]]
         }
         query = self.service.spreadsheets().values().append(spreadsheetId=self.spreadsheet_id, range=self.range,
                                                             body=body, valueInputOption="RAW")

@@ -1,6 +1,6 @@
 import os
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
-from telegram.ext import Updater, CommandHandler, ConversationHandler, CallbackQueryHandler, RegexHandler
+from telegram.ext import Updater, CommandHandler, ConversationHandler, CallbackQueryHandler, RegexHandler, MessageHandler
 from telegram.ext.filters import InvertedFilter, Filters
 from .spreadsheets import ItemsCatalog, OrderList, get_credentials
 
@@ -14,8 +14,11 @@ class Text:
     CONFIRM_ITEM = "_Подтвердите позицию:_\n*{}*\n{}"
     CONFIRMED_ITEM = "*{}*\n{}"
     CHOOSE_COUNT = "_Укажите количество (только цифрами):_"
-    DONE = "Заказ №{} на *{}* {}шт успешно создан."
-    PRODUCTION = "Заказ №{}\n*[{}] {} {}шт*\nСотрудник: `{}`"
+    SET_DEADLINE = "_Введите дату дедлайна (в формате 23.02):_"
+    SET_COMMENT = "_Введите назначение заказа:_"
+    DONE = "Заказ №{} на *{}* {}шт успешно создан.\nДедлайн: {}\nНазначение: {}"
+    ABORTED = "_Оформление заказа отменено_"
+    PRODUCTION = "Заказ №{}\n*[{}] {} {}шт*\nСотрудник: `{}`\nДедлайн: {}\nНазначение: {}"
 
 
 class State:
@@ -26,6 +29,8 @@ class State:
     CHOOSE_ITEM = 2
     CONFIRM_ITEM = 3
     CHOOSE_COUNT = 4
+    SET_DEADLINE = 5
+    SET_COMMENT = 6
 
 
 def start_command(bot, update):
@@ -35,12 +40,13 @@ def start_command(bot, update):
     update.message.reply_text(START_MSG)
 
 
-def order_command(bot, update):
+def order_command(bot, update, user_data):
     """
     Start ordering process
     """
-    update.message.reply_text(Text.CHOOSE_CATEGORY, reply_markup=get_category_menu(),
-                              parse_mode=ParseMode.MARKDOWN)
+    message = update.message.reply_text(Text.CHOOSE_CATEGORY, reply_markup=get_category_menu(),
+                                        parse_mode=ParseMode.MARKDOWN)
+    user_data['keyboard_message'] = message.message_id
     return State.CHOOSE_CATEGORY
 
 
@@ -94,6 +100,7 @@ def confirm_item_callback(bot, update, user_data):
         bot.edit_message_text(text=Text.CONFIRMED_ITEM.format(item[1], item[2]),
                               chat_id=query.message.chat_id, message_id=query.message.message_id,
                               parse_mode=ParseMode.MARKDOWN)
+        del user_data['keyboard_message']
         bot.send_message(text=Text.CHOOSE_COUNT, chat_id=query.message.chat_id,
                          parse_mode=ParseMode.MARKDOWN)
         return State.CHOOSE_COUNT
@@ -101,26 +108,51 @@ def confirm_item_callback(bot, update, user_data):
 
 def count_handler(bot, update, user_data):
     """
+    Read items count
+    """
+    user_data['count'] = int(update.message.text)
+    update.message.reply_text(text=Text.SET_DEADLINE, parse_mode=ParseMode.MARKDOWN)
+    return State.SET_DEADLINE
+
+
+def deadline_handler(bot, update, user_data):
+    """
+    Read order deadline
+    """
+    user_data['deadline'] = update.message.text
+    update.message.reply_text(text=Text.SET_COMMENT, parse_mode=ParseMode.MARKDOWN)
+    return State.SET_COMMENT
+
+
+def comment_handler(bot, update, user_data):
+    """
+    Read order comment
     Put order in DB and notify in channel
     """
-    count = int(update.message.text)
+    comment = update.message.text
+    deadline = user_data['deadline']
+    count = user_data['count']
     item = ic.get(user_data['category'], user_data['item'])
     name = update.message.from_user.name
-    order_id = ol.new(item, count, name)
-    update.message.reply_text(Text.DONE.format(order_id, item[1], count),
+    order_id = ol.new(item, count, name, deadline, comment)
+    update.message.reply_text(Text.DONE.format(order_id, item[1], count, deadline, comment),
                               parse_mode=ParseMode.MARKDOWN)
     try:
-        bot.send_message(text=Text.PRODUCTION.format(order_id, item[0], item[1], count, name),
+        bot.send_message(text=Text.PRODUCTION.format(order_id, item[0], item[1], count, name, deadline, comment),
                          chat_id=PRODUCTION_CHAT_ID, parse_mode=ParseMode.MARKDOWN)
     except Exception:
         print("Can't send message to notification chat")
     return ConversationHandler.END
 
 
-def abort_command(bot, update):
+def abort_command(bot, update, user_data):
     """
     Abort ordering process
     """
+    if 'keyboard_message' in user_data:
+        bot.edit_message_text(text=Text.ABORTED, chat_id=update.message.chat_id,
+                              message_id=user_data['keyboard_message'], parse_mode=ParseMode.MARKDOWN)
+        del user_data['keyboard_message']
     update.message.reply_text("Заказ прерван")
     return ConversationHandler.END
 
@@ -232,14 +264,16 @@ def init(catalog_id, orders_id, secrets_dir, chat_id, start_msg, proxy=None):
     updater.dispatcher.add_handler(CommandHandler('start', start_command, filters=InvertedFilter(Filters.group)))
     # Order process
     conversation_handler = ConversationHandler(
-        entry_points=[CommandHandler('order', order_command, filters=InvertedFilter(Filters.group))],
+        entry_points=[CommandHandler('order', order_command, filters=InvertedFilter(Filters.group), pass_user_data=True)],
         states={
             State.CHOOSE_CATEGORY: [CallbackQueryHandler(category_callback, pass_user_data=True)],
-            State.CHOOSE_ITEM: [CallbackQueryHandler(items_callback, pass_user_data=True)],
-            State.CONFIRM_ITEM: [CallbackQueryHandler(confirm_item_callback, pass_user_data=True)],
-            State.CHOOSE_COUNT: [RegexHandler(r"^[0-9]+$", count_handler, pass_user_data=True)]
+            State.CHOOSE_ITEM:     [CallbackQueryHandler(items_callback, pass_user_data=True)],
+            State.CONFIRM_ITEM:    [CallbackQueryHandler(confirm_item_callback, pass_user_data=True)],
+            State.CHOOSE_COUNT:    [RegexHandler(r"^[0-9]+$", count_handler, pass_user_data=True)],
+            State.SET_DEADLINE:    [RegexHandler(r"^[0-9]{1,2}\.[0-9]{2}$", deadline_handler, pass_user_data=True)],
+            State.SET_COMMENT:     [MessageHandler(Filters.text, comment_handler, pass_user_data=True)]
         },
-        fallbacks=[CommandHandler('abort', abort_command, filters=InvertedFilter(Filters.group))]
+        fallbacks=[CommandHandler('abort', abort_command, filters=InvertedFilter(Filters.group), pass_user_data=True)]
     )
     updater.dispatcher.add_handler(conversation_handler)
     updater.dispatcher.add_handler(CommandHandler('chatid', chatid_command))
