@@ -22,15 +22,15 @@ class ItemsCatalog(SpreadsheetService):
     """
     Provides list of available items for requesting
     """
-    range = "Новая номенклатура!A2:C"  # default catalog range
 
-    def __init__(self, credentials, table_id):
+    def __init__(self, credentials, table_config):
         """
         :param credentials: ServiceAccountCredentials
         :param table_id: Id of Google Spreadsheet
         """
         super(ItemsCatalog, self).__init__(credentials)
-        self.spreadsheet_id = table_id
+        self.spreadsheet_id = table_config['table']
+        self.range = table_config['sheet'] + "!" + table_config['range']
         self._cache = {}
         self.last_update = 0  # timestamp
         self.all()  # to preload catalog
@@ -114,16 +114,16 @@ class OrderList(SpreadsheetService):
     """
     Provides storage for orders
     """
-    range = "orders!A:F"  # default append range
-    id_range = "orders!A2:A"  # default id range
 
-    def __init__(self, credentials, table_id):
+    def __init__(self, credentials, table_config):
         """
         :param credentials: ServiceAccountCredentials
         :param table_id: Id of Google Spreadsheet
         """
         super(OrderList, self).__init__(credentials)
-        self.spreadsheet_id = table_id
+        self.spreadsheet_id = table_config['table']
+        self.range = table_config['sheet'] + "!" + table_config['range']
+        self.id_range = table_config['sheet'] + "!" + table_config['id-range']
         self.last_id = 0
         self.get_last_id()
 

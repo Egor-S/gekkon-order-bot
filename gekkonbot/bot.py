@@ -181,16 +181,6 @@ def error_handler(bot, update, telegram_error):
     print("Error occured: ", telegram_error)
 
 
-def get_token(token_path):
-    """
-    :param token_path: Path to token file
-    :return: Token
-    """
-    with open(token_path, "r") as f:
-        token = f.read()
-    return token.strip()
-
-
 def get_category_menu():
     """
     :return:  InlineKeyboardMarkup
@@ -235,32 +225,28 @@ def get_confirm_menu():
     return markup
 
 
-def init(catalog_id, orders_id, secrets_dir, chat_id, start_msg, proxy=None):
+def init(config):
     """
-    :param catalog_id: Google spreadsheet id
-    :param orders_id: Google spreadsheet id
-    :param secrets_dir: Directory with secrets
-    :param chat_id: Production chat id (for notifications)
-    :param proxy: Tuple (url, username, password) for proxy or None
+    :param config: Config dictionary
     :return: Updated object
     """
     global ic, ol, PRODUCTION_CHAT_ID, START_MSG
-    credentials = get_credentials(os.path.join(secrets_dir, "google_service.json"))
-    ic = ItemsCatalog(credentials, catalog_id)
-    ol = OrderList(credentials, orders_id)
-    PRODUCTION_CHAT_ID = chat_id
-    START_MSG = start_msg
+    credentials = get_credentials(config['google-credentials-path'])
+    ic = ItemsCatalog(credentials, config['catalog'])
+    ol = OrderList(credentials, config['orders'])
+    PRODUCTION_CHAT_ID = config['notification-chat']
+    START_MSG = config['welcome-message']
 
     request_kwargs = {}
     # proxy setup
-    if proxy is not None:
-        request_kwargs['proxy_url'] = proxy[0]
+    if 'proxy' in config:
+        request_kwargs['proxy_url'] = config['proxy']['url']
         request_kwargs['urllib3_proxy_kwargs'] = {
-            'username': proxy[1],
-            'password': proxy[2]
+            'username': config['proxy']['user'],
+            'password': config['proxy']['password']
         }
 
-    updater = Updater(get_token(os.path.join("telegram.secret")), request_kwargs=request_kwargs)
+    updater = Updater(config['telegram-token'], request_kwargs=request_kwargs)
     updater.dispatcher.add_handler(CommandHandler('start', start_command, filters=InvertedFilter(Filters.group)))
     # Order process
     conversation_handler = ConversationHandler(

@@ -4,4 +4,4 @@ venv/
 .DS_Store
 
 google_service.json
-telegram.secret
+config.json
