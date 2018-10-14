@@ -58,7 +58,12 @@ class ItemsCatalog(SpreadsheetService):
                             })
                         category_name = row[0].split(":")[-1].strip()
                         category_items = {}
+                    elif len(row) < 3:
+                        print("No name in row: {}".format(row))
+                        continue
                     else:
+                        if not row[2]:  # skip subitem
+                            continue
                         try:
                             code = int(row[1])
                             name_search = re.search('"([^"]+)"', row[2])
@@ -67,10 +72,7 @@ class ItemsCatalog(SpreadsheetService):
                             else:
                                 category_items[code] = (row[2], row[2])
                         except ValueError:  # no code
-                            print("No code in {}".format(row))
-                            continue
-                        except IndexError:  # no name
-                            print("No name in {}".format(row))
+                            print("No code in row: {}".format(row))
                             continue
 
             if len(category_items) > 0:
@@ -149,7 +151,7 @@ class OrderList(SpreadsheetService):
         self.last_id += 1
         order_id = "{:05}".format(self.last_id)
         body = {
-            'values': [[order_id, str(item[0]), item[1], str(count), customer, time, '', '', deadline, comment]]
+            'values': [[order_id, str(item[0]), item[1], str(count), customer, time, '', '', '', '', deadline, comment]]
         }
         query = self.service.spreadsheets().values().append(spreadsheetId=self.spreadsheet_id, range=self.range,
                                                             body=body, valueInputOption="RAW")

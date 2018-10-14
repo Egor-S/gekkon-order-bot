@@ -11,7 +11,7 @@ class Text:
     """
     CHOOSE_CATEGORY = "_Выберите категорию:_"
     CHOOSE_ITEM = "_Выберите позицию:_"
-    CONFIRM_ITEM = "_Подтвердите позицию:_\n*{}*\n{}"
+    CONFIRM_ITEM = "_Подтвердите позицию:_\n*[{}] {}*\n{}"
     CONFIRMED_ITEM = "*{}*\n{}"
     CHOOSE_COUNT = "_Укажите количество (только цифрами):_"
     SET_DEADLINE = "_Введите дату дедлайна (в формате 23.02):_"
@@ -77,7 +77,7 @@ def items_callback(bot, update, user_data):
         return State.CHOOSE_CATEGORY
     user_data['item'] = int(query.data)
     item = ic.get(user_data['category'], user_data['item'])
-    bot.edit_message_text(text=Text.CONFIRM_ITEM.format(item[1], item[2]), reply_markup=get_confirm_menu(),
+    bot.edit_message_text(text=Text.CONFIRM_ITEM.format(item[0], item[1], item[2]), reply_markup=get_confirm_menu(),
                           chat_id=query.message.chat_id, message_id=query.message.message_id,
                           parse_mode=ParseMode.MARKDOWN)
     return State.CONFIRM_ITEM
