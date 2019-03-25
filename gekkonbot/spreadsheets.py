@@ -48,7 +48,7 @@ class ItemsCatalog(SpreadsheetService):
             category_name = "Unnamed category"
             category_items = {}
 
-            for row in rows:
+            for i, row in enumerate(rows):
                 if len(row) > 0:
                     if row[0]:  # category header
                         if len(category_items) > 0:
@@ -59,7 +59,7 @@ class ItemsCatalog(SpreadsheetService):
                         category_name = row[0].split(":")[-1].strip()
                         category_items = {}
                     elif len(row) < 3:
-                        print("No name in row: {}".format(row))
+                        print("No name in row #{}".format(i + 2))
                         continue
                     else:
                         if not row[2]:  # skip subitem
@@ -72,7 +72,7 @@ class ItemsCatalog(SpreadsheetService):
                             else:
                                 category_items[code] = (row[2], row[2])
                         except ValueError:  # no code
-                            print("No code in row: {}".format(row))
+                            print("No code in row #{}".format(i + 2))
                             continue
 
             if len(category_items) > 0:
