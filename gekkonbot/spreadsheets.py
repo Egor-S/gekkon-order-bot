@@ -135,7 +135,7 @@ class OrderList(SpreadsheetService):
         """
         query = self.service.spreadsheets().values().get(spreadsheetId=self.spreadsheet_id, range=self.id_range)
         response = query.execute()
-        column = list(zip(*response.get('values', [['0']])))[0]
+        column = [x[0] for x in response.get('values', [['0']]) if len(x)]
         self.last_id = max(map(int, column))
 
     def new(self, item, count, customer, deadline, comment):
