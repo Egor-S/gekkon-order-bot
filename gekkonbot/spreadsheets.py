@@ -7,6 +7,7 @@ from oauth2client import service_account
 
 DISCOVERY_URL = "https://sheets.googleapis.com/$discovery/rest?version=v4"
 UPDATE_DELAY = 1000 * 60 * 30  # 30 minutes
+MSK_TZ = dt.timezone(dt.timedelta(hours=3))
 
 
 class SpreadsheetService:
@@ -147,7 +148,7 @@ class OrderList(SpreadsheetService):
         :param comment: Purpose for order
         :return:
         """
-        time = dt.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+        time = dt.datetime.now(tz=MSK_TZ).strftime("%d.%m.%Y %H:%M:%S")
         self.last_id += 1
         order_id = "{:05}".format(self.last_id)
         body = {
