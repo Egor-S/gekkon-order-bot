@@ -1,6 +1,7 @@
 .idea/
 venv/
 *.pyc
+*.log
 .DS_Store
 
 google_service.json
