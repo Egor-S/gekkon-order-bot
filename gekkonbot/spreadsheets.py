@@ -152,7 +152,7 @@ class OrderList(SpreadsheetService):
         self.last_id += 1
         order_id = "{:05}".format(self.last_id)
         body = {
-            'values': [[order_id, str(item[0]), item[1], count, customer, time, '', '', '', '', deadline, comment]]
+            'values': [[order_id, item[0], item[1], count, customer, time, '', '', '', '', deadline, comment]]
         }
         query = self.service.spreadsheets().values().append(spreadsheetId=self.spreadsheet_id, range=self.range,
                                                             body=body, valueInputOption="RAW")
