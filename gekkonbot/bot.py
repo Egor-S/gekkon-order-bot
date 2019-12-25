@@ -2,7 +2,7 @@ import os
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from telegram.ext import Updater, CommandHandler, ConversationHandler, CallbackQueryHandler, RegexHandler, MessageHandler
 from telegram.ext.filters import InvertedFilter, Filters
-from .spreadsheets import ItemsCatalog, OrderList, get_credentials
+from .spreadsheets import ItemsCatalog, OrderList, DestinationList, get_credentials
 
 
 class Text:
@@ -15,10 +15,12 @@ class Text:
     CONFIRMED_ITEM = "*{}*\n{}"
     CHOOSE_COUNT = "_Укажите количество (только цифрами):_"
     SET_DEADLINE = "_Введите дату дедлайна (в формате 23.02):_"
-    SET_COMMENT = "_Введите назначение заказа:_"
-    DONE = "Заказ №{} на *{}* {}шт успешно создан.\nДедлайн: {}\nНазначение: {}"
+    SET_COMMENT = "Введите комментарий к заказу _(опционально)_:"
+    DONE = "Заказ №{} на *{}* {}шт успешно создан.\nДедлайн: {}\nНазначение: {}\nКомментарий: {}"
     ABORTED = "_Оформление заказа отменено_"
-    PRODUCTION = "Заказ №{}\n*[{}] {} {}шт*\nСотрудник: `{}`\nДедлайн: {}\nНазначение: {}"
+    PRODUCTION = "Заказ №{}\n*[{}] {} {}шт*\nСотрудник: `{}`\nДедлайн: {}\nНазначение: {}\nКомментарий: {}"
+    SET_DESTINATION = "Введите поисковый запрос для выбора площадки-назначения:"
+    DESTINATION_LIST = "По запросу *{}* найдено площадок: {}. Повторите поиск, если нужная площадка не найдена."
 
 
 class State:
@@ -31,6 +33,27 @@ class State:
     CHOOSE_COUNT = 4
     SET_DEADLINE = 5
     SET_COMMENT = 6
+    SET_DESTINATION = 7
+
+
+def put_order(bot, update, user_data, callback=False):
+    deadline = user_data['deadline']
+    count = user_data['count']
+    item = ic.get(user_data['category'], user_data['item'])
+    dl.update_recent(user_data['destination'])
+    dst = dl.get(user_data['destination'])
+    comment = user_data['comment']
+    query_or_update = update.message if not callback else update.callback_query
+    name = query_or_update.from_user.name
+    order_id = ol.new(item, count, name, deadline, dst, comment)
+    query_or_update = update if not callback else update.callback_query
+    query_or_update.message.reply_text(Text.DONE.format(order_id, item[1], count, deadline, dst, comment),
+                                       parse_mode=ParseMode.MARKDOWN)
+    try:
+        bot.send_message(text=Text.PRODUCTION.format(order_id, item[0], item[1], count, name, deadline, dst, comment),
+                         chat_id=PRODUCTION_CHAT_ID, parse_mode=ParseMode.MARKDOWN)
+    except Exception:
+        print("Can't send message to notification chat")
 
 
 def start_command(bot, update):
@@ -120,7 +143,54 @@ def deadline_handler(bot, update, user_data):
     Read order deadline
     """
     user_data['deadline'] = update.message.text
-    update.message.reply_text(text=Text.SET_COMMENT, parse_mode=ParseMode.MARKDOWN)
+    message = update.message.reply_text(text=Text.SET_DESTINATION, reply_markup=get_destinations_menu(dl.get_recent()),
+                                        parse_mode=ParseMode.MARKDOWN)
+    if len(dl.get_recent()) > 0:
+        user_data['keyboard_message'] = message.message_id
+    user_data['destination_results'] = None
+    return State.SET_DESTINATION
+
+
+def destination_handler(bot, update, user_data):
+    """
+    Read query and show search results
+    """
+    if 'keyboard_message' in user_data:  # more beautiful solution?
+        if user_data.get('destination_results', None) is None:
+            text = Text.SET_DESTINATION
+        else:
+            text = Text.DESTINATION_LIST.format(*user_data['destination_results'])
+        bot.edit_message_text(text=text, chat_id=update.message.chat_id,
+                              message_id=user_data['keyboard_message'], parse_mode=ParseMode.MARKDOWN)
+        del user_data['keyboard_message']
+
+    results = dl.search(update.message.text)
+    try:
+        message = update.message.reply_text(text=Text.DESTINATION_LIST.format(update.message.text, len(results)),
+                                            reply_markup=get_destinations_menu(results[:16]), parse_mode=ParseMode.MARKDOWN)
+    except:
+        print("???", results[:16])
+    if len(results) > 0:
+        user_data['keyboard_message'] = message.message_id
+
+
+def destination_callback(bot, update, user_data):
+    query = update.callback_query
+    bot.answer_callback_query(query.id)  # To stop loading circles on buttons
+    user_data['destination'] = query.data
+
+    if 'keyboard_message' in user_data:  # more beautiful solution?
+        if user_data.get('destination_results', None) is None:
+            text = Text.SET_DESTINATION
+        else:
+            text = Text.DESTINATION_LIST.format(*user_data['destination_results'])
+        bot.edit_message_text(text=text, chat_id=query.message.chat_id,
+                              message_id=user_data['keyboard_message'], parse_mode=ParseMode.MARKDOWN)
+        del user_data['keyboard_message']
+
+    message = query.message.reply_text(text=Text.SET_COMMENT, reply_markup=get_comment_menu(),
+                                        parse_mode=ParseMode.MARKDOWN)
+    user_data['keyboard_message'] = message.message_id
     return State.SET_COMMENT
 
 
@@ -129,19 +199,28 @@ def comment_handler(bot, update, user_data):
     Read order comment
     Put order in DB and notify in channel
     """
-    comment = update.message.text
-    deadline = user_data['deadline']
-    count = user_data['count']
-    item = ic.get(user_data['category'], user_data['item'])
-    name = update.message.from_user.name
-    order_id = ol.new(item, count, name, deadline, comment)
-    update.message.reply_text(Text.DONE.format(order_id, item[1], count, deadline, comment),
-                              parse_mode=ParseMode.MARKDOWN)
-    try:
-        bot.send_message(text=Text.PRODUCTION.format(order_id, item[0], item[1], count, name, deadline, comment),
-                         chat_id=PRODUCTION_CHAT_ID, parse_mode=ParseMode.MARKDOWN)
-    except Exception:
-        print("Can't send message to notification chat")
+    user_data['comment'] = update.message.text
+    put_order(bot, update, user_data)
+    if 'keyboard_message' in user_data:  # more beautiful solution?
+        bot.edit_message_text(text=Text.SET_COMMENT, chat_id=update.message.chat_id,
+                              message_id=user_data['keyboard_message'], parse_mode=ParseMode.MARKDOWN)
+        del user_data['keyboard_message']
+    return ConversationHandler.END
+
+
+def comment_callback(bot, update, user_data):
+    """
+    Read order comment
+    Put order in DB and notify in channel
+    """
+    query = update.callback_query
+    bot.answer_callback_query(query.id)  # To stop loading circles on buttons
+    user_data['comment'] = ""
+    put_order(bot, update, user_data, callback=True)
+    if 'keyboard_message' in user_data:  # more beautiful solution?
+        bot.edit_message_text(text=Text.SET_COMMENT, chat_id=query.message.chat_id,
+                              message_id=user_data['keyboard_message'], parse_mode=ParseMode.MARKDOWN)
+        del user_data['keyboard_message']
     return ConversationHandler.END
 
 
@@ -171,6 +250,8 @@ def forceupdate_command(bot, update):
     """
     ic.last_update = 0
     ic.all()
+    dl.last_update = 0
+    dl.all()
     bot.send_message(text="База успешно обновлена", chat_id=update.message.chat_id)
 
 
@@ -225,15 +306,34 @@ def get_confirm_menu():
     return markup
 
 
+def get_destinations_menu(destinations):
+    keyboard = []
+    for i, (dst, dst_hash) in enumerate(destinations):
+        button = InlineKeyboardButton(dst, callback_data=dst_hash)
+        if i % 2:
+            keyboard[-1].append(button)
+        else:
+            keyboard.append([button])
+    markup = InlineKeyboardMarkup(keyboard)
+    return markup
+
+
+def get_comment_menu():
+    keyboard = [[InlineKeyboardButton("Пропустить", callback_data="skip")]]
+    markup = InlineKeyboardMarkup(keyboard)
+    return markup
+
+
 def init(config):
     """
     :param config: Config dictionary
     :return: Updated object
     """
-    global ic, ol, PRODUCTION_CHAT_ID, START_MSG
+    global ic, ol, dl, PRODUCTION_CHAT_ID, START_MSG
     credentials = get_credentials(config['google-credentials-path'])
     ic = ItemsCatalog(credentials, config['catalog'])
     ol = OrderList(credentials, config['orders'])
+    dl = DestinationList(credentials, config['destinations'])
     PRODUCTION_CHAT_ID = config['notification-chat']
     START_MSG = config['welcome-message']
 
@@ -257,7 +357,10 @@ def init(config):
             State.CONFIRM_ITEM:    [CallbackQueryHandler(confirm_item_callback, pass_user_data=True)],
             State.CHOOSE_COUNT:    [RegexHandler(r"^[0-9]+$", count_handler, pass_user_data=True)],
             State.SET_DEADLINE:    [RegexHandler(r"^[0-9]{1,2}\.[0-9]{2}$", deadline_handler, pass_user_data=True)],
-            State.SET_COMMENT:     [MessageHandler(Filters.text, comment_handler, pass_user_data=True)]
+            State.SET_DESTINATION: [MessageHandler(Filters.text, destination_handler, pass_user_data=True),
+                                    CallbackQueryHandler(destination_callback, pass_user_data=True)],
+            State.SET_COMMENT:     [MessageHandler(Filters.text, comment_handler, pass_user_data=True),
+                                    CallbackQueryHandler(comment_callback, pass_user_data=True)]
         },
         fallbacks=[CommandHandler('abort', abort_command, filters=InvertedFilter(Filters.group), pass_user_data=True)]
     )

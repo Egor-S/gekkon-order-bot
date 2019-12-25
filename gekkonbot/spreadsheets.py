@@ -2,11 +2,13 @@ import httplib2
 import apiclient
 import re
 import datetime as dt
+import hashlib
 from oauth2client import service_account
 
 
 DISCOVERY_URL = "https://sheets.googleapis.com/$discovery/rest?version=v4"
 UPDATE_DELAY = 1000 * 60 * 30  # 30 minutes
+RECENT_SIZE = 6
 MSK_TZ = dt.timezone(dt.timedelta(hours=3))
 
 
@@ -139,12 +141,13 @@ class OrderList(SpreadsheetService):
         column = [x[0] for x in response.get('values', [['0']]) if len(x)]
         self.last_id = max(map(int, column))
 
-    def new(self, item, count, customer, deadline, comment):
+    def new(self, item, count, customer, deadline, destination, comment):
         """
         :param item: Item code
         :param count: Items count
         :param customer: Customer name
         :param deadline: Deadline date
+        :param destination: Destination school
         :param comment: Purpose for order
         :return:
         """
@@ -152,12 +155,70 @@ class OrderList(SpreadsheetService):
         self.last_id += 1
         order_id = "{:05}".format(self.last_id)
         body = {
-            'values': [[order_id, item[0], item[1], count, customer, time, '', '', '', '', deadline, comment]]
+            'values': [[order_id, item[0], item[1], count, customer, time, '', '', '', '', deadline, destination, comment]]
         }
         query = self.service.spreadsheets().values().append(spreadsheetId=self.spreadsheet_id, range=self.range,
                                                             body=body, valueInputOption="RAW")
         result = query.execute()
         return order_id
+
+
+class DestinationList(SpreadsheetService):
+    """
+    Provides list of available destinations
+    """
+
+    def __init__(self, credentials, table_config):
+        super(DestinationList, self).__init__(credentials)
+        self.spreadsheet_id = table_config['table']
+        self.range = table_config['sheet'] + "!" + table_config['range']
+        self._cache = []
+        self.recent = []
+        self.last_update = 0  # timestamp
+        self.all()  # to preload destinations
+
+    def all(self):
+        now = dt.datetime.now().timestamp()
+        if now - self.last_update > UPDATE_DELAY:
+            query = self.service.spreadsheets().values().get(spreadsheetId=self.spreadsheet_id, range=self.range)
+            response = query.execute()
+            rows = response.get('values', [])
+            self._cache = []
+            for row in rows:
+                if not len(row):
+                    continue
+                md5 = hashlib.new('md5')
+                md5.update(row[0].encode('utf-8'))
+                self._cache.append((row[0], md5.hexdigest()))
+            self.last_update = now
+        return self._cache
+
+    def get_recent(self):
+        return self.recent
+
+    def update_recent(self, dst_hash):
+        for i in range(len(self.recent)):
+            if self.recent[i][1] == dst_hash:
+                self.recent.pop(i)
+                break
+        self.recent.insert(0, (self.get(dst_hash), dst_hash))
+        if len(self.recent) > RECENT_SIZE:
+            self.recent = self.recent[:RECENT_SIZE]
+
+    def get(self, query_hash):
+        for dst, dst_hash in self._cache:
+            if dst_hash == query_hash:
+                return dst
+        raise IndexError
+
+    def search(self, query):
+        destinations = self.all()
+        query = query.lower()
+        results = []
+        for dst, dst_hash in destinations:
+            if query in ' {} '.format(dst.lower()):
+                results.append((dst, dst_hash))
+        return results
 
 
 def get_credentials(credentials_path):
