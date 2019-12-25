@@ -165,11 +165,9 @@ def destination_handler(bot, update, user_data):
         del user_data['keyboard_message']
 
     results = dl.search(update.message.text)
-    try:
-        message = update.message.reply_text(text=Text.DESTINATION_LIST.format(update.message.text, len(results)),
-                                            reply_markup=get_destinations_menu(results[:16]), parse_mode=ParseMode.MARKDOWN)
-    except:
-        print("???", results[:16])
+    user_data['destination_results'] = (update.message.text, len(results))
+    message = update.message.reply_text(text=Text.DESTINATION_LIST.format(update.message.text, len(results)),
+                                        reply_markup=get_destinations_menu(results[:16]), parse_mode=ParseMode.MARKDOWN)
     if len(results) > 0:
         user_data['keyboard_message'] = message.message_id
 
